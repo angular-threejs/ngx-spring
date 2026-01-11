@@ -1,3 +1,15 @@
 {
-  "singleQuote": true
+	"singleQuote": true,
+	"htmlWhitespaceSensitivity": "ignore",
+	"useTabs": true,
+	"tabWidth": 4,
+	"plugins": ["prettier-plugin-organize-imports"],
+	"overrides": [
+		{
+			"files": "*.html",
+			"options": {
+				"parser": "angular"
+			}
+		}
+	]
 }
