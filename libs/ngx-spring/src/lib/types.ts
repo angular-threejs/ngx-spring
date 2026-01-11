@@ -46,16 +46,42 @@ export type Constrain<T, U> = [T] extends [Any] ? U : [T] extends [U] ? T : U;
 // Animatable Types
 // ============================================================================
 
-/** These types can be animated */
-export type Animatable<T = any> = T extends number
+/** Base primitive types that can be animated */
+export type AnimatablePrimitive = number | string;
+
+/**
+ * All types that can be animated:
+ * - Primitives: number, string
+ * - Arrays: only flat arrays of primitives
+ * - Objects: can nest other animatable values
+ */
+export type AnimatableValue =
+	| AnimatablePrimitive
+	| readonly AnimatablePrimitive[]
+	| { readonly [key: string]: AnimatableValue };
+
+/**
+ * Widens an AnimatableValue to its broader type.
+ * - number literals → number
+ * - string literals → string
+ * - arrays → preserves structure, widens elements
+ * - objects → preserves structure, recursively widens values
+ *
+ * @example
+ * Animatable<0> // number
+ * Animatable<[0, 0, 0]> // [number, number, number]
+ * Animatable<{ x: 0, y: 100 }> // { x: number, y: number }
+ * Animatable<{ pos: [0, 0], color: { r: 255 } }> // { pos: [number, number], color: { r: number } }
+ */
+export type Animatable<T extends AnimatableValue> = T extends number
 	? number
 	: T extends string
 		? string
-		: T extends ReadonlyArray<number | string>
-			? Array<number | string> extends T
-				? ReadonlyArray<number | string>
-				: { [P in keyof T]: Animatable<T[P]> }
-			: never;
+		: T extends readonly AnimatablePrimitive[]
+			? { [K in keyof T]: Animatable<T[K] & AnimatablePrimitive> }
+			: T extends object
+				? { [K in keyof T]: Animatable<T[K] & AnimatableValue> }
+				: never;
 
 // ============================================================================
 // Easing Types
@@ -73,7 +99,7 @@ export type InterpolatorFn<Input, Output> = (
 	...inputs: Arrify<Input>
 ) => Output;
 
-export interface InterpolatorConfig<Output = Animatable> {
+export interface InterpolatorConfig<Output = AnimatableValue> {
 	/**
 	 * What happens when the spring goes below its target value.
 	 * @default 'extend'
@@ -101,7 +127,7 @@ export interface InterpolatorConfig<Output = Animatable> {
 	/**
 	 * Output values from the interpolation function.
 	 */
-	output: readonly Constrain<Output, Animatable>[];
+	output: readonly Constrain<Output, AnimatableValue>[];
 
 	/**
 	 * Transformation to apply to the value before interpolation.
@@ -390,13 +416,13 @@ export interface AnimationRange<T> {
  * A getter function that returns an animatable value.
  * This is the Angular-idiomatic way to create reactive spring values.
  */
-export type SpringGetter<T extends Animatable> = () => T;
+export type SpringGetter<T extends AnimatableValue> = () => T;
 
 /**
  * Map of property keys to getter functions.
  * Used with the spring() function for signal-reactive animations.
  */
-export type SpringGetters<T extends Record<string, Animatable>> = {
+export type SpringGetters<T extends Record<string, AnimatableValue>> = {
 	[K in keyof T]: SpringGetter<T[K]>;
 };
 
@@ -423,7 +449,7 @@ export interface SpringOptions<T = any> extends SpringEventProps<T> {
 /**
  * From/To style spring configuration
  */
-export interface SpringFromTo<T extends Record<string, Animatable>> {
+export interface SpringFromTo<T extends Record<string, AnimatableValue>> {
 	from?: Partial<SpringGetters<T>>;
 	to?: Partial<SpringGetters<T>>;
 }

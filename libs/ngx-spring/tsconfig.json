@@ -10,7 +10,8 @@
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"emitDecoratorMetadata": false,
-		"module": "preserve"
+		"module": "preserve",
+		"verbatimModuleSyntax": true
 	},
 	"angularCompilerOptions": {
 		"enableI18nLegacyMessageIdFormat": false,
