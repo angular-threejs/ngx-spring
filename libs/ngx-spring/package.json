@@ -5,5 +5,8 @@
 		"@angular/common": "^21.0.0",
 		"@angular/core": "^21.0.0"
 	},
+	"dependencies": {
+		"@react-spring/rafz": "^10.0.0"
+	},
 	"sideEffects": false
 }

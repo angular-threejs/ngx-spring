@@ -3,5 +3,6 @@
 	"dest": "../../dist/libs/ngx-spring",
 	"lib": {
 		"entryFile": "src/index.ts"
-	}
+	},
+	"allowedNonPeerDependencies": ["@react-spring/rafz"]
 }
