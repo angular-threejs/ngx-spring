@@ -16,7 +16,7 @@ import type {
 /**
  * Helper type to widen all values in a record
  */
-type AnimatableRecord<T extends Record<string, AnimatableValue>> = {
+export type AnimatableRecord<T extends Record<string, AnimatableValue>> = {
 	[K in keyof T]: Animatable<T[K]>;
 };
 

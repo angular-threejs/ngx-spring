@@ -39,6 +39,7 @@ export { SpringValue, type SpringValueObserver } from './lib/spring-value';
 
 // SpringRef interface
 export type {
+	AnimatableRecord,
 	AnySpringRef,
 	SpringRef,
 	SpringStartProps,

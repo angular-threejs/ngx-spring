@@ -15,7 +15,8 @@
 		"skipDefaultLibCheck": true,
 		"baseUrl": ".",
 		"paths": {
-			"ngx-spring": ["libs/ngx-spring/src/index.ts"]
+			"ngx-spring": ["libs/ngx-spring/src/index.ts"],
+			"ngx-spring/dom": ["libs/ngx-spring/dom/src/index.ts"]
 		}
 	},
 	"exclude": ["node_modules", "tmp"]
