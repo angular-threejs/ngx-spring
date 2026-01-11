@@ -93,4 +93,4 @@ export interface SpringStartProps<T extends Record<string, AnimatableValue>> {
 /**
  * Base type for any SpringRef - used by directives
  */
-export type AnySpringRef = SpringRef<Record<string, AnimatableValue>>;
+export type AnySpringRef = SpringRef<any>;
