@@ -1,6 +1,28 @@
 {
 	"name": "ngx-spring",
 	"version": "0.0.1",
+	"description": "Spring-physics based animations for Angular, inspired by react-spring",
+	"author": "Chau Tran",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/angular-threejs/ngx-spring"
+	},
+	"bugs": {
+		"url": "https://github.com/angular-threejs/ngx-spring/issues"
+	},
+	"homepage": "https://github.com/angular-threejs/ngx-spring#readme",
+	"keywords": [
+		"angular",
+		"animation",
+		"spring",
+		"spring-physics",
+		"react-spring",
+		"motion",
+		"physics",
+		"signals",
+		"reactive"
+	],
 	"peerDependencies": {
 		"@angular/common": "^21.0.0",
 		"@angular/core": "^21.0.0"

@@ -1,102 +1,137 @@
-# NgxSpring
+# ngx-spring
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+Spring-physics based animations for Angular, inspired by [react-spring](https://www.react-spring.dev/).
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+Create fluid, natural-feeling animations using spring physics instead of durations and easing curves. Integrates seamlessly with Angular's signal-based reactivity.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/getting-started/tutorials/angular-monorepo-tutorial?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+## Features
 
-## Run tasks
+- **Spring Physics**: Natural, physics-based animations that feel alive
+- **Signal Reactive**: Automatically animates when your signals change
+- **Transform Shortcuts**: Use `x`, `y`, `scale`, `rotate` instead of verbose CSS
+- **SSR Safe**: Only runs animations in the browser
+- **TypeScript First**: Full type safety with inferred types
+- **Lightweight**: Built on top of `@react-spring/rafz` for efficient frame scheduling
 
-To run the dev server for your app, use:
+## Requirements
 
-```sh
-npx nx serve examples
+- Angular 21+ (`@angular/core` and `@angular/common`)
+
+## Installation
+
+```bash
+npm install ngx-spring
 ```
 
-To create a production bundle:
+## Quick Start
 
-```sh
-npx nx build examples
+```typescript
+import { Component, signal } from '@angular/core';
+import { spring, Spring } from 'ngx-spring/dom';
+
+@Component({
+  selector: 'app-animated-box',
+  standalone: true,
+  imports: [Spring],
+  template: `
+    <div [spring]="springValues" class="box">
+      Hover me!
+    </div>
+  `,
+  host: {
+    '(mouseenter)': 'isHovered.set(true)',
+    '(mouseleave)': 'isHovered.set(false)',
+  },
+})
+export class AnimatedBoxComponent {
+  isHovered = signal(false);
+
+  // Spring automatically animates when isHovered changes
+  springValues = spring({
+    scale: () => this.isHovered() ? 1.1 : 1,
+    rotate: () => this.isHovered() ? 5 : 0,
+  });
+}
 ```
 
-To see all available targets to run for a project, run:
+## API Overview
 
-```sh
-npx nx show project examples
+### `spring()` Function
+
+Creates reactive spring animations. Accepts getter functions that are tracked for signal changes.
+
+```typescript
+import { spring, config } from 'ngx-spring/dom';
+
+// Basic usage
+springValues = spring({
+  opacity: () => this.isVisible() ? 1 : 0,
+  x: () => this.position().x,
+});
+
+// With custom spring physics
+springValues = spring({
+  y: () => this.isOpen() ? 0 : -100,
+}, {
+  config: config.wobbly,  // Bouncy animation
+});
+
+// From/to style
+springValues = spring({
+  from: { opacity: () => 0 },
+  to: { opacity: () => this.isVisible() ? 1 : 0 },
+});
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+### `Spring` Directive
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+Applies spring animations to DOM elements.
 
-## Add new projects
+```html
+<!-- Basic usage -->
+<div [spring]="springValues">Animated content</div>
 
-While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.
-
-Use the plugin's generator to create new projects.
-
-To generate a new application, use:
-
-```sh
-npx nx g @nx/angular:app demo
+<!-- Custom target element -->
+<div [spring]="springValues" [springHost]="targetRef">
+  <div #targetRef>This element gets animated</div>
+</div>
 ```
 
-To generate a new library, use:
+### Transform Shortcuts
 
-```sh
-npx nx g @nx/angular:lib mylib
+Use convenient shortcuts instead of writing CSS transforms:
+
+| Shortcut | CSS Transform |
+|----------|---------------|
+| `x`, `y`, `z` | `translate()` / `translate3d()` |
+| `scale`, `scaleX`, `scaleY` | `scale()` / `scaleX()` / `scaleY()` |
+| `rotate`, `rotateX`, `rotateY`, `rotateZ` | `rotate()` / `rotateX()` / etc. |
+| `skew`, `skewX`, `skewY` | `skew()` / `skewX()` / `skewY()` |
+
+### Spring Presets
+
+Built-in spring configurations:
+
+```typescript
+import { config } from 'ngx-spring';
+
+config.default   // tension: 170, friction: 26
+config.gentle    // tension: 120, friction: 14
+config.wobbly    // tension: 180, friction: 12
+config.stiff     // tension: 210, friction: 20
+config.slow      // tension: 280, friction: 60
+config.molasses  // tension: 280, friction: 120
 ```
 
-You can use `npx nx list` to get a list of installed plugins. Then, run `npx nx list <plugin-name>` to learn about more specific capabilities of a particular plugin. Alternatively, [install Nx Console](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) to browse plugins and generators in your IDE.
+## Package Structure
 
-[Learn more about Nx plugins &raquo;](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) | [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- `ngx-spring` - Core animation primitives (`SpringValue`, `config`, `easings`)
+- `ngx-spring/dom` - DOM-specific utilities (`spring()`, `Spring` directive)
 
-## Set up CI!
+## Credits
 
-### Step 1
+Inspired by [react-spring](https://www.react-spring.dev/) - A spring-physics first animation library.
 
-To connect to Nx Cloud, run the following command:
+## License
 
-```sh
-npx nx connect
-```
-
-Connecting to Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Step 2
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
-```
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/getting-started/tutorials/angular-monorepo-tutorial?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+MIT - Chau Tran

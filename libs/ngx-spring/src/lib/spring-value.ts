@@ -1,3 +1,14 @@
+/**
+ * @fileoverview SpringValue - Core animation primitive for ngx-spring
+ *
+ * SpringValue is the fundamental building block for spring animations.
+ * It manages the animation state for a single animatable value (number, array, or object)
+ * using spring physics or duration-based easing.
+ *
+ * @module ngx-spring
+ * @see {@link https://www.react-spring.dev/ | react-spring} - Inspiration for this library
+ */
+
 import { defaults } from './config';
 import { easings } from './easing';
 import { frameLoop, type OpaqueAnimation } from './frame-loop';
@@ -11,6 +22,7 @@ import type {
 
 /**
  * Internal animation state for a single numeric value
+ * @internal
  */
 interface AnimatedNode {
 	/** Current position */
@@ -50,12 +62,47 @@ interface MergedConfig {
 
 /**
  * Observer callback for value changes
+ *
+ * @template T - The animatable value type
+ * @param value - The current animated value
+ * @param spring - The SpringValue instance that changed
  */
 export type SpringValueObserver<T extends AnimatableValue> = (
 	value: Animatable<T>,
 	spring: SpringValue<T>,
 ) => void;
 
+/**
+ * A single animated value that uses spring physics.
+ *
+ * SpringValue is the core animation primitive. It can animate numbers, arrays of numbers,
+ * or nested objects containing numbers. The animation uses spring physics by default,
+ * but can also use duration-based easing.
+ *
+ * @template TValue - The type of value being animated (extends AnimatableValue)
+ *
+ * @example
+ * ```typescript
+ * // Animate a single number
+ * const opacity = new SpringValue(0);
+ * opacity.start({ to: 1 });
+ *
+ * // Animate an array (e.g., position)
+ * const position = new SpringValue([0, 0, 0]);
+ * position.start({ to: [100, 200, 0] });
+ *
+ * // With custom spring config
+ * const scale = new SpringValue(1, { tension: 300, friction: 10 });
+ *
+ * // Subscribe to value changes
+ * const unsubscribe = opacity.onChange((value) => {
+ *   element.style.opacity = String(value);
+ * });
+ * ```
+ *
+ * @see {@link SpringConfig} for available configuration options
+ * @see {@link config} for preset spring configurations
+ */
 export class SpringValue<
 	TValue extends AnimatableValue = number,
 > implements OpaqueAnimation {
@@ -88,12 +135,33 @@ export class SpringValue<
 		(result: AnimationResult<Animatable<TValue>>) => void
 	> = [];
 
-	/** Priority for frame loop ordering */
+	/**
+	 * Priority for frame loop ordering.
+	 * Lower priority animations are executed first.
+	 */
 	priority = 0;
 
 	/** Memoized duration for smooth duration changes */
 	private _memoizedDuration = 0;
 
+	/**
+	 * Creates a new SpringValue with an initial value.
+	 *
+	 * @param initial - The initial value (also used as the starting "from" value)
+	 * @param config - Optional spring physics configuration
+	 *
+	 * @example
+	 * ```typescript
+	 * // Default spring physics
+	 * const value = new SpringValue(0);
+	 *
+	 * // Custom spring config
+	 * const bouncy = new SpringValue(0, { tension: 300, friction: 10 });
+	 *
+	 * // Duration-based animation instead of spring physics
+	 * const timed = new SpringValue(0, { duration: 1000, easing: easings.easeOutCubic });
+	 * ```
+	 */
 	constructor(initial: TValue, config?: SpringConfig) {
 		this._value = initial as unknown as Animatable<TValue>;
 		this._to = initial as unknown as Animatable<TValue>;
@@ -102,22 +170,43 @@ export class SpringValue<
 		this._initNodes();
 	}
 
-	/** Whether the spring is idle (not animating) */
+	/**
+	 * Whether the spring is idle (not animating or paused).
+	 * Used by the frame loop to determine if the animation should continue.
+	 */
 	get idle(): boolean {
 		return !this._animating || this._paused;
 	}
 
-	/** Current value */
+	/**
+	 * Get the current animated value.
+	 *
+	 * @returns The current value with widened types
+	 *
+	 * @example
+	 * ```typescript
+	 * const spring = new SpringValue(0);
+	 * spring.start({ to: 100 });
+	 * // During animation:
+	 * console.log(spring.get()); // 0, 15.2, 42.8, ... 100
+	 * ```
+	 */
 	get(): Animatable<TValue> {
 		return this._value;
 	}
 
-	/** Target value */
+	/**
+	 * Get the target value the spring is animating towards.
+	 */
 	get goal(): Animatable<TValue> {
 		return this._to;
 	}
 
-	/** Current velocity */
+	/**
+	 * Get the current velocity of the animation.
+	 *
+	 * @returns A single number for scalar values, or an array for vector values
+	 */
 	get velocity(): number | number[] {
 		if (this._nodes.length === 1) {
 			return this._nodes[0].velocity;
@@ -125,23 +214,51 @@ export class SpringValue<
 		return this._nodes.map((n) => n.velocity);
 	}
 
-	/** Whether any animation has occurred */
+	/**
+	 * Whether the spring has ever animated (elapsed time > 0).
+	 */
 	get hasAnimated(): boolean {
 		return this._nodes.some((n) => n.elapsedTime > 0);
 	}
 
-	/** Whether currently animating */
+	/**
+	 * Whether the spring is currently animating.
+	 */
 	get isAnimating(): boolean {
 		return this._animating;
 	}
 
-	/** Whether paused */
+	/**
+	 * Whether the animation is paused.
+	 */
 	get isPaused(): boolean {
 		return this._paused;
 	}
 
 	/**
-	 * Start animating to a new value
+	 * Start animating to a new target value.
+	 *
+	 * @param props - Animation properties
+	 * @param props.to - Target value to animate to
+	 * @param props.from - Starting value (defaults to current value)
+	 * @param props.config - Spring configuration override
+	 * @param props.immediate - If true, jump to target without animation
+	 * @returns Promise that resolves when animation completes
+	 *
+	 * @example
+	 * ```typescript
+	 * // Basic animation
+	 * await spring.start({ to: 100 });
+	 *
+	 * // With from value
+	 * await spring.start({ from: 0, to: 100 });
+	 *
+	 * // Immediate (no animation)
+	 * await spring.start({ to: 100, immediate: true });
+	 *
+	 * // With custom config
+	 * await spring.start({ to: 100, config: { tension: 300 } });
+	 * ```
 	 */
 	start(props: {
 		to?: Animatable<TValue>;
@@ -191,7 +308,16 @@ export class SpringValue<
 	}
 
 	/**
-	 * Set the value immediately without animation
+	 * Set the value immediately without animation.
+	 * Stops any in-progress animation.
+	 *
+	 * @param value - The value to set
+	 * @returns This SpringValue for chaining
+	 *
+	 * @example
+	 * ```typescript
+	 * spring.set(100); // Immediately jumps to 100
+	 * ```
 	 */
 	set(value: Animatable<TValue>): this {
 		this.stop();
@@ -202,7 +328,16 @@ export class SpringValue<
 	}
 
 	/**
-	 * Stop the current animation
+	 * Stop the current animation.
+	 *
+	 * @param cancel - If true, marks the animation as cancelled in the result
+	 * @returns This SpringValue for chaining
+	 *
+	 * @example
+	 * ```typescript
+	 * spring.stop();       // Stop gracefully (finished: true)
+	 * spring.stop(true);   // Cancel (cancelled: true)
+	 * ```
 	 */
 	stop(cancel = false): this {
 		if (this._animating) {
@@ -218,7 +353,10 @@ export class SpringValue<
 	}
 
 	/**
-	 * Pause the animation
+	 * Pause the animation at its current position.
+	 * Use {@link resume} to continue.
+	 *
+	 * @returns This SpringValue for chaining
 	 */
 	pause(): this {
 		this._paused = true;
@@ -226,7 +364,9 @@ export class SpringValue<
 	}
 
 	/**
-	 * Resume the animation
+	 * Resume a paused animation.
+	 *
+	 * @returns This SpringValue for chaining
 	 */
 	resume(): this {
 		this._paused = false;
@@ -237,7 +377,9 @@ export class SpringValue<
 	}
 
 	/**
-	 * Skip to the end of the animation
+	 * Immediately finish the animation by jumping to the target value.
+	 *
+	 * @returns This SpringValue for chaining
 	 */
 	finish(): this {
 		if (this._animating) {
@@ -248,7 +390,20 @@ export class SpringValue<
 	}
 
 	/**
-	 * Subscribe to value changes
+	 * Subscribe to value changes during animation.
+	 *
+	 * @param observer - Callback invoked on each value change
+	 * @returns Unsubscribe function
+	 *
+	 * @example
+	 * ```typescript
+	 * const unsubscribe = spring.onChange((value, spring) => {
+	 *   element.style.transform = `scale(${value})`;
+	 * });
+	 *
+	 * // Later, to stop listening:
+	 * unsubscribe();
+	 * ```
 	 */
 	onChange(observer: SpringValueObserver<TValue>): () => void {
 		this._observers.add(observer);
@@ -256,7 +411,11 @@ export class SpringValue<
 	}
 
 	/**
-	 * Advance the animation by delta time (called by frame loop)
+	 * Advance the animation by delta time.
+	 * Called by the frame loop on each animation frame.
+	 *
+	 * @param dt - Delta time in milliseconds since last frame
+	 * @internal
 	 */
 	advance(dt: number): void {
 		if (this._paused || !this._animating) return;

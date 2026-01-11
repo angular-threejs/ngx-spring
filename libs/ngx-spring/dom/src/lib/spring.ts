@@ -1,3 +1,34 @@
+/**
+ * @fileoverview DOM spring animations for Angular
+ *
+ * This module provides the `spring()` function and `Spring` directive for creating
+ * reactive spring animations that automatically apply to DOM elements.
+ *
+ * Inspired by {@link https://www.react-spring.dev/ | react-spring}, adapted for Angular's
+ * signal-based reactivity system.
+ *
+ * @module ngx-spring/dom
+ *
+ * @example
+ * ```typescript
+ * // In your component
+ * export class MyComponent {
+ *   isVisible = signal(false);
+ *
+ *   // Create reactive spring - automatically animates when isVisible changes
+ *   springValues = spring({
+ *     opacity: () => this.isVisible() ? 1 : 0,
+ *     scale: () => this.isVisible() ? 1 : 0.9,
+ *   });
+ * }
+ * ```
+ *
+ * ```html
+ * <!-- In your template -->
+ * <div [spring]="springValues">Animated content</div>
+ * ```
+ */
+
 import { isPlatformBrowser } from '@angular/common';
 import {
 	afterRenderEffect,
@@ -31,7 +62,10 @@ import {
 	separateTransformKeys,
 } from './transforms';
 
-/** Properties that need 'px' units */
+/**
+ * CSS properties that require 'px' units when animated as numbers.
+ * @internal
+ */
 const PX_PROPERTIES = new Set([
 	'width',
 	'height',
@@ -61,7 +95,10 @@ const PX_PROPERTIES = new Set([
 	'minHeight',
 ]);
 
-/** Properties that are unitless */
+/**
+ * CSS properties that don't require units (dimensionless values).
+ * @internal
+ */
 const UNITLESS_PROPERTIES = new Set([
 	'opacity',
 	'zIndex',
@@ -73,32 +110,90 @@ const UNITLESS_PROPERTIES = new Set([
 ]);
 
 /**
- * Options for creating a spring
+ * Options for creating a spring animation with the `spring()` function.
+ *
+ * @example
+ * ```typescript
+ * spring(values, {
+ *   config: config.gentle,
+ *   immediate: false,
+ *   onChange: (result) => console.log('Value changed:', result.value),
+ * });
+ * ```
  */
 export interface SpringOptions extends SpringEventProps {
-	/** Spring physics configuration */
+	/**
+	 * Spring physics configuration.
+	 * Use presets from `config` or provide custom tension/friction values.
+	 *
+	 * @see {@link config} for preset configurations
+	 */
 	config?: SpringConfig;
-	/** Loop the animation */
+
+	/**
+	 * Whether to loop the animation continuously.
+	 * @default false
+	 */
 	loop?: boolean;
-	/** Immediately jump to target value */
+
+	/**
+	 * If true, values jump immediately without animation.
+	 * @default false
+	 */
 	immediate?: boolean;
-	/** Injector for dependency injection context */
+
+	/**
+	 * Injector for dependency injection context.
+	 * Required when calling `spring()` outside of an injection context.
+	 */
 	injector?: Injector;
 }
 
 /**
  * Getter-based spring values where each property is a function returning the target value.
- * This enables signal reactivity.
+ * This pattern enables Angular signal reactivity - when signals used in getters change,
+ * the spring automatically animates to the new value.
+ *
+ * @template T - Record of property names to animatable values
+ *
+ * @example
+ * ```typescript
+ * // Each property is a getter function
+ * const values: SpringGetterValues<{ opacity: number; x: number }> = {
+ *   opacity: () => isVisible() ? 1 : 0,
+ *   x: () => position().x,
+ * };
+ * ```
  */
 export type SpringGetterValues<T extends Record<string, AnimatableValue>> = {
 	[K in keyof T]: () => T[K];
 };
 
 /**
- * From/To style spring configuration
+ * Alternative configuration style using explicit `from` and `to` values.
+ * Useful when you need to specify different starting values.
+ *
+ * @template T - Record of property names to animatable values
+ *
+ * @example
+ * ```typescript
+ * spring({
+ *   from: { opacity: () => 0, y: () => -20 },
+ *   to: { opacity: () => isVisible() ? 1 : 0, y: () => isVisible() ? 0 : -20 },
+ * });
+ * ```
  */
 export interface SpringFromToConfig<T extends Record<string, AnimatableValue>> {
+	/**
+	 * Starting values for the animation.
+	 * Each property is a getter function.
+	 */
 	from?: Partial<SpringGetterValues<T>>;
+
+	/**
+	 * Target values for the animation.
+	 * Each property is a getter function that will be watched for changes.
+	 */
 	to?: Partial<SpringGetterValues<T>>;
 }
 
@@ -106,7 +201,8 @@ export interface SpringFromToConfig<T extends Record<string, AnimatableValue>> {
 let frameLoopInitialized = false;
 
 /**
- * Initialize the frame loop for browser environment
+ * Initialize the frame loop for browser environment.
+ * @internal
  */
 function initFrameLoop(injector: Injector): void {
 	if (frameLoopInitialized) return;
@@ -123,29 +219,70 @@ function initFrameLoop(injector: Injector): void {
 /**
  * Create reactive spring animations for DOM element styles.
  *
+ * This is the primary API for creating spring animations in Angular. It accepts
+ * getter functions that are automatically tracked for signal changes. When any
+ * signal used in a getter changes, the spring smoothly animates to the new value.
+ *
+ * **Supported properties:**
+ * - Transform shortcuts: `x`, `y`, `z`, `scale`, `scaleX`, `scaleY`, `rotate`, `rotateX`, `rotateY`, `rotateZ`, `skew`, `skewX`, `skewY`
+ * - CSS properties: `opacity`, `width`, `height`, `padding`, `margin`, `fontSize`, etc.
+ *
+ * @template T - Record of property names to their animatable value types
+ *
+ * @param values - Object mapping property names to getter functions, or a from/to config
+ * @param options - Spring configuration and event callbacks
+ * @returns A SpringRef that can be used with the `[spring]` directive
+ *
  * @example
- * ```ts
- * // Simple getter-based usage
+ * ```typescript
+ * // Basic reactive animation
+ * isVisible = signal(false);
+ *
  * springValues = spring({
  *   opacity: () => this.isVisible() ? 1 : 0,
- *   scale: () => this.isHovered() ? 1.1 : 1,
+ *   scale: () => this.isVisible() ? 1 : 0.9,
  * });
  *
- * // With config
+ * // Toggle animation by changing the signal
+ * this.isVisible.set(true);  // Animates opacity 0→1, scale 0.9→1
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With custom spring physics
  * springValues = spring({
  *   x: () => this.position(),
- * }, { config: config.gentle });
- *
- * // From/to style
- * springValues = spring({
- *   from: { opacity: () => 0 },
- *   to: { opacity: () => this.isVisible() ? 1 : 0 },
+ * }, {
+ *   config: { tension: 300, friction: 20 },
  * });
  * ```
  *
- * @param values - Object mapping property names to getter functions
- * @param options - Spring configuration and callbacks
- * @returns SpringRef for use with [spring] directive
+ * @example
+ * ```typescript
+ * // Using preset configs
+ * import { config } from 'ngx-spring';
+ *
+ * springValues = spring({
+ *   y: () => this.isOpen() ? 0 : -100,
+ * }, {
+ *   config: config.wobbly,  // Bouncy animation
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // From/to style for explicit starting values
+ * springValues = spring({
+ *   from: { opacity: () => 0, y: () => 20 },
+ *   to: { opacity: () => 1, y: () => 0 },
+ * });
+ * ```
+ *
+ * @example
+ * ```html
+ * <!-- Use in template with the Spring directive -->
+ * <div [spring]="springValues">Animated content</div>
+ * ```
  */
 export function spring<T extends Record<string, AnimatableValue>>(
 	values: SpringGetterValues<T> | SpringFromToConfig<T>,
@@ -379,25 +516,63 @@ export function spring<T extends Record<string, AnimatableValue>>(
 }
 
 /**
- * Directive that applies spring-animated values to an element's styles.
+ * Directive that applies spring-animated values to a DOM element's styles.
  *
- * @example
+ * The `Spring` directive connects a `SpringRef` (created by the `spring()` function)
+ * to a DOM element, automatically updating the element's styles as values animate.
+ *
+ * **Features:**
+ * - Automatic style application with proper CSS units
+ * - Transform shortcut support (`x`, `y`, `scale`, `rotate`, etc.)
+ * - Reactive element targeting via `springHost`
+ * - SSR-safe (only runs in browser)
+ * - Efficient batched updates via requestAnimationFrame
+ *
+ * @usageNotes
+ *
+ * ### Basic Usage
  * ```html
- * <div [spring]="springRef">Animated content</div>
- *
- * <!-- With custom target element -->
- * <div [spring]="springRef" [springHost]="customElement">...</div>
- *
- * <!-- With reactive getter -->
- * <div [spring]="springRef" [springHost]="getElement">...</div>
+ * <div [spring]="springValues">Animated content</div>
  * ```
+ *
+ * ### Custom Target Element
+ * Apply animations to a different element than the directive host:
+ * ```html
+ * <div [spring]="springValues" [springHost]="targetElement">
+ *   <div #targetElement>This element gets animated</div>
+ * </div>
+ * ```
+ *
+ * ### Reactive Element (Dynamic Target)
+ * Use a getter function for elements that may not exist immediately:
+ * ```typescript
+ * getCanvasElement = () => this.canvasRef()?.nativeElement;
+ * ```
+ * ```html
+ * <div [spring]="springValues" [springHost]="getCanvasElement">...</div>
+ * ```
+ *
+ * @selector [spring]
+ * @standalone
  */
 @Directive({ selector: '[spring]' })
 export class Spring {
-	/** The spring reference containing animated values */
+	/**
+	 * The spring reference containing animated values.
+	 * Created using the `spring()` function.
+	 */
 	readonly spring = input.required<AnySpringRef>();
 
-	/** Optional target element override (defaults to host element) */
+	/**
+	 * Optional target element to apply styles to.
+	 *
+	 * - If not provided: styles apply to the directive's host element
+	 * - If provided: styles apply to the specified element
+	 * - Accepts: `ElementRef`, `HTMLElement`, or a getter function returning either
+	 *
+	 * Use a getter function when the element may not be available immediately
+	 * (e.g., elements inside `@if` blocks or `@defer`).
+	 */
 	readonly springHost = input<
 		| ElementRef<HTMLElement>
 		| HTMLElement
