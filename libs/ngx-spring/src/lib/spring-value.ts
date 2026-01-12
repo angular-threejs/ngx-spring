@@ -9,6 +9,7 @@
  * @see {@link https://www.react-spring.dev/ | react-spring} - Inspiration for this library
  */
 
+import { isColor, parseColor, rgbaToString, type RGBA } from './color';
 import { defaults } from './config';
 import { easings } from './easing';
 import { frameLoop, type OpaqueAnimation } from './frame-loop';
@@ -19,6 +20,13 @@ import type {
 	EasingFunction,
 	SpringConfig,
 } from './types';
+import { formatUnit, isUnitValue, parseUnit, type ParsedUnit } from './units';
+
+/**
+ * Type of value being animated - determines parsing/formatting strategy
+ * @internal
+ */
+type ValueType = 'number' | 'array' | 'color' | 'unit';
 
 /**
  * Internal animation state for a single numeric value
@@ -118,6 +126,15 @@ export class SpringValue<
 	/** Animation configuration */
 	private _config: MergedConfig;
 
+	/** Type of value being animated */
+	private _valueType: ValueType = 'number';
+
+	/** Parsed color data (for color animations) */
+	private _colorData: { from: RGBA; to: RGBA } | null = null;
+
+	/** Parsed unit data (for unit string animations) */
+	private _unitData: { from: ParsedUnit; to: ParsedUnit } | null = null;
+
 	/** Internal animation nodes (one per numeric component) */
 	private _nodes: AnimatedNode[] = [];
 
@@ -167,6 +184,7 @@ export class SpringValue<
 		this._to = initial as unknown as Animatable<TValue>;
 		this._from = initial as unknown as Animatable<TValue>;
 		this._config = this._mergeConfig(config);
+		this._valueType = this._detectValueType(initial);
 		this._initNodes();
 	}
 
@@ -282,6 +300,9 @@ export class SpringValue<
 			if (props.to !== undefined) {
 				this._to = props.to;
 			}
+
+			// Setup color/unit parsing data
+			this._setupAnimationData();
 
 			// Immediate mode - jump to target
 			if (props.immediate) {
@@ -638,8 +659,32 @@ export class SpringValue<
 		if (Array.isArray(value)) {
 			return value.map((v) => (typeof v === 'number' ? v : 0));
 		}
-		// For strings (like colors), we'd need color parsing here
-		// For now, return empty array
+		if (typeof value === 'string') {
+			// Color value - return RGBA components
+			if (this._valueType === 'color') {
+				if (value === this._from && this._colorData) {
+					return [...this._colorData.from];
+				}
+				if (value === this._to && this._colorData) {
+					return [...this._colorData.to];
+				}
+				// Parse on the fly
+				const rgba = parseColor(value);
+				return rgba ? [...rgba] : [0, 0, 0, 1];
+			}
+			// Unit value - return numeric part
+			if (this._valueType === 'unit') {
+				if (value === this._from && this._unitData) {
+					return [this._unitData.from.value];
+				}
+				if (value === this._to && this._unitData) {
+					return [this._unitData.to.value];
+				}
+				// Parse on the fly
+				const parsed = parseUnit(value);
+				return parsed ? [parsed.value] : [0];
+			}
+		}
 		return [0];
 	}
 
@@ -647,14 +692,34 @@ export class SpringValue<
 	 * Update the value from animation nodes
 	 */
 	private _updateValueFromNodes(): void {
-		if (typeof this._value === 'number') {
-			this._setValue(this._nodes[0].position as Animatable<TValue>);
-		} else if (Array.isArray(this._value)) {
-			this._setValue(
-				this._nodes.map(
-					(n) => n.position,
-				) as unknown as Animatable<TValue>,
-			);
+		switch (this._valueType) {
+			case 'number':
+				this._setValue(this._nodes[0].position as Animatable<TValue>);
+				break;
+			case 'array':
+				this._setValue(
+					this._nodes.map(
+						(n) => n.position,
+					) as unknown as Animatable<TValue>,
+				);
+				break;
+			case 'color': {
+				const rgba: RGBA = [
+					Math.round(this._nodes[0].position),
+					Math.round(this._nodes[1].position),
+					Math.round(this._nodes[2].position),
+					this._nodes[3].position,
+				];
+				this._setValue(rgbaToString(rgba) as Animatable<TValue>);
+				break;
+			}
+			case 'unit': {
+				const unit = this._unitData?.to.unit || '';
+				this._setValue(
+					formatUnit(this._nodes[0].position, unit) as Animatable<TValue>,
+				);
+				break;
+			}
 		}
 	}
 
@@ -695,5 +760,69 @@ export class SpringValue<
 			return a.length === b.length && a.every((v, i) => v === b[i]);
 		}
 		return false;
+	}
+
+	/**
+	 * Detect the type of value being animated
+	 */
+	private _detectValueType(value: unknown): ValueType {
+		if (typeof value === 'number') {
+			return 'number';
+		}
+		if (Array.isArray(value)) {
+			return 'array';
+		}
+		if (typeof value === 'string') {
+			if (isColor(value)) {
+				return 'color';
+			}
+			if (isUnitValue(value)) {
+				return 'unit';
+			}
+		}
+		return 'number';
+	}
+
+	/**
+	 * Setup color/unit parsing data for the current animation
+	 */
+	private _setupAnimationData(): void {
+		// Detect type from target value (may change from initial)
+		this._valueType = this._detectValueType(this._to);
+
+		if (this._valueType === 'color') {
+			const fromColor = parseColor(String(this._from)) || [0, 0, 0, 1];
+			const toColor = parseColor(String(this._to)) || [0, 0, 0, 1];
+			this._colorData = { from: fromColor as RGBA, to: toColor as RGBA };
+			// Reinitialize nodes for 4 components (RGBA)
+			this._nodes = fromColor.map((v) => ({
+				position: v,
+				lastPosition: v,
+				velocity: 0,
+				v0: null,
+				elapsedTime: 0,
+				durationProgress: 0,
+				done: false,
+			}));
+		} else if (this._valueType === 'unit') {
+			const fromUnit = parseUnit(String(this._from)) || { value: 0, unit: '' };
+			const toUnit = parseUnit(String(this._to)) || { value: 0, unit: '' };
+			this._unitData = { from: fromUnit, to: toUnit };
+			// Reinitialize nodes for 1 component
+			this._nodes = [
+				{
+					position: fromUnit.value,
+					lastPosition: fromUnit.value,
+					velocity: 0,
+					v0: null,
+					elapsedTime: 0,
+					durationProgress: 0,
+					done: false,
+				},
+			];
+		} else {
+			this._colorData = null;
+			this._unitData = null;
+		}
 	}
 }
