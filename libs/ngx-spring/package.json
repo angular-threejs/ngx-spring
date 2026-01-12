@@ -25,7 +25,17 @@
 	],
 	"peerDependencies": {
 		"@angular/common": "^21.0.0",
-		"@angular/core": "^21.0.0"
+		"@angular/core": "^21.0.0",
+		"angular-three": "^4.0.0",
+		"three": ">=0.174.0"
+	},
+	"peerDependenciesMeta": {
+		"angular-three": {
+			"optional": true
+		},
+		"three": {
+			"optional": true
+		}
 	},
 	"dependencies": {
 		"@react-spring/rafz": "^10.0.0"
