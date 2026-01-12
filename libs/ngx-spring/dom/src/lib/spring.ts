@@ -53,6 +53,8 @@ import {
 	type AnySpringRef,
 	type SpringConfig,
 	type SpringEventProps,
+	type SpringFromTo,
+	type SpringGetters,
 	type SpringRef,
 	SpringValue,
 } from 'ngx-spring';
@@ -149,54 +151,6 @@ export interface SpringOptions extends SpringEventProps {
 	injector?: Injector;
 }
 
-/**
- * Getter-based spring values where each property is a function returning the target value.
- * This pattern enables Angular signal reactivity - when signals used in getters change,
- * the spring automatically animates to the new value.
- *
- * @template T - Record of property names to animatable values
- *
- * @example
- * ```typescript
- * // Each property is a getter function
- * const values: SpringGetterValues<{ opacity: number; x: number }> = {
- *   opacity: () => isVisible() ? 1 : 0,
- *   x: () => position().x,
- * };
- * ```
- */
-export type SpringGetterValues<T extends Record<string, AnimatableValue>> = {
-	[K in keyof T]: () => T[K];
-};
-
-/**
- * Alternative configuration style using explicit `from` and `to` values.
- * Useful when you need to specify different starting values.
- *
- * @template T - Record of property names to animatable values
- *
- * @example
- * ```typescript
- * spring({
- *   from: { opacity: () => 0, y: () => -20 },
- *   to: { opacity: () => isVisible() ? 1 : 0, y: () => isVisible() ? 0 : -20 },
- * });
- * ```
- */
-export interface SpringFromToConfig<T extends Record<string, AnimatableValue>> {
-	/**
-	 * Starting values for the animation.
-	 * Each property is a getter function.
-	 */
-	from?: Partial<SpringGetterValues<T>>;
-
-	/**
-	 * Target values for the animation.
-	 * Each property is a getter function that will be watched for changes.
-	 */
-	to?: Partial<SpringGetterValues<T>>;
-}
-
 // Track if frame loop is initialized (per platform)
 let frameLoopInitialized = false;
 
@@ -285,7 +239,7 @@ function initFrameLoop(injector: Injector): void {
  * ```
  */
 export function spring<T extends Record<string, AnimatableValue>>(
-	values: SpringGetterValues<T> | SpringFromToConfig<T>,
+	values: SpringGetters<T> | SpringFromTo<T>,
 	options: SpringOptions = {},
 ): SpringRef<T> {
 	const injector = options.injector;
@@ -305,17 +259,17 @@ export function spring<T extends Record<string, AnimatableValue>>(
 		initFrameLoop(currentInjector);
 
 		// Parse values - handle both getter-based and from/to styles
-		let getters: SpringGetterValues<T>;
-		let fromGetters: Partial<SpringGetterValues<T>> | undefined;
+		let getters: SpringGetters<T>;
+		let fromGetters: Partial<SpringGetters<T>> | undefined;
 
 		if ('to' in values || 'from' in values) {
 			// From/to style
-			const config = values as SpringFromToConfig<T>;
-			getters = (config.to ?? {}) as SpringGetterValues<T>;
+			const config = values as SpringFromTo<T>;
+			getters = (config.to ?? {}) as SpringGetters<T>;
 			fromGetters = config.from;
 		} else {
 			// Direct getter style
-			getters = values as SpringGetterValues<T>;
+			getters = values as SpringGetters<T>;
 		}
 
 		const springValues = new Map<keyof T, SpringValue<T[keyof T]>>();
